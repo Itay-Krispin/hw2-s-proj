@@ -15,17 +15,17 @@ struct vector {
     struct cord *cords;
 };
 
-/* Constants */
-const double EPSILON = 0.0001;
-
 /* Declare functions */
+void check_inputs(int argc, char *argv[]);
+void print_vectors(struct vector *v);
+struct vector* create_vectors(void);
 struct vector* create_vectors_from_pyobject(PyObject *data);
 struct vector* copy_first_k_vectors(struct vector *head_vec, int k);
 struct cord* copy_cords(struct cord *head_cord);
 double euclidean_distance(struct cord *cords1, struct cord *cords2);
 void assign_clusters(struct vector *head_vec, struct vector *centroids, struct vector **clusters, int k);
 struct vector* calculate_centroids(struct vector **clusters, int k);
-int centroids_converged(struct vector *old_centroids, struct vector *new_centroids);
+int centroids_converged(struct vector *old_centroids, struct vector *new_centroids, double epsilon);
 void free_vectors(struct vector *head_vec);
 void free_cords(struct cord *head_cord);
 PyObject* vector_to_pyobject(struct vector *head_vec);
@@ -39,10 +39,11 @@ void divide_cord_values_by_number(struct cord *head_cord, int number);
 static PyObject* fit(PyObject *self, PyObject *args) {
     PyObject *initial_centroids_py, *data_py;
     int k, iter, i;
+    double epsilon;
     struct vector *data, *centroids, *new_centroids;
     struct vector **clusters;
 
-    if (!PyArg_ParseTuple(args, "OOii", &initial_centroids_py, &data_py, &k, &iter)) {
+    if (!PyArg_ParseTuple(args, "OOiid", &initial_centroids_py, &data_py, &k, &iter, &epsilon)) {
         return NULL;
     }
 
@@ -65,7 +66,7 @@ static PyObject* fit(PyObject *self, PyObject *args) {
         assign_clusters(data, centroids, clusters, k);
         new_centroids = calculate_centroids(clusters, k);
 
-        if (centroids_converged(centroids, new_centroids)) {
+        if (centroids_converged(centroids, new_centroids, epsilon)) {
             free_vectors(centroids);
             centroids = new_centroids;
             break;
@@ -97,6 +98,7 @@ struct vector* create_vectors_from_pyobject(PyObject *data) {
     struct cord *head_cord, *curr_cord, *new_cord;
 
     num_vectors = PyList_Size(data);
+    // printf("num_vectors = %d\n", num_vectors);
 
     head_vec = malloc(sizeof(struct vector));
     if (head_vec == NULL) {
@@ -213,61 +215,6 @@ static struct PyModuleDef mykmeansspmodule = {
 /* Module initialization */
 PyMODINIT_FUNC PyInit_mykmeanssp(void) {
     return PyModule_Create(&mykmeansspmodule);
-}
-
-/* Main function */
-int main(int argc, char *argv[]) {
-    int k, iter, i;
-    struct vector *head_vec, *centroids, *new_centroids;
-
-    /* clusters is an array of pointers to vectors (so an array of vectors) */
-    struct vector **clusters;
-
-    check_inputs(argc, argv);
-    k = atoi(argv[1]);
-    iter = atoi(argv[2]);
-
-    head_vec = create_vectors();
-    centroids = copy_first_k_vectors(head_vec, k);
-
-    clusters = malloc(k * sizeof(struct vector*));
-    /* checking for successful memory allocation */
-    if (clusters == NULL) {
-        printf("Memory allocation failed for clusters.\n");
-        free_vectors(head_vec);
-        free_vectors(centroids);
-        exit(1);
-    }
-
-    for (i = 0; i < k; i++) {
-        clusters[i] = NULL;
-    }
-
-    for (i = 0; i < iter; i++) {
-        assign_clusters(head_vec, centroids, clusters, k);
-        new_centroids = calculate_centroids(clusters, k);
-
-        if (centroids_converged(centroids, new_centroids)) {
-            free_vectors(centroids);
-            centroids = new_centroids;
-            break;
-        }
-
-        free_vectors(centroids);
-        centroids = new_centroids;
-    }
-    print_vectors(centroids);
-
-    free_vectors(head_vec);
-    free_vectors(centroids);
-    for (i = 0; i < k; i++) {
-        if (clusters[i] != NULL) {
-            free_vectors(clusters[i]);
-        }
-    }
-    free(clusters);
-
-    return 0;
 }
 
 /* Check input validity */
@@ -582,9 +529,9 @@ struct vector* calculate_centroids(struct vector **clusters, int k) {
 }
 
 /* Check if centroids have converged */
-int centroids_converged(struct vector *old_centroids, struct vector *new_centroids) {
+int centroids_converged(struct vector *old_centroids, struct vector *new_centroids, double epsilon) {
     while (old_centroids != NULL && new_centroids != NULL) {
-        if (euclidean_distance(old_centroids->cords, new_centroids->cords) > EPSILON) {
+        if (euclidean_distance(old_centroids->cords, new_centroids->cords) > epsilon) {
             return 0;
         }
         old_centroids = old_centroids->next;
