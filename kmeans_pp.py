@@ -6,31 +6,48 @@ import mykmeanssp
 
 def validate_args(args):
     if len(args) < 5:
-        raise ValueError("Insufficient arguments provided!")
+        raise ValueError("An Error Has Occurred")
+
+    K = float(args[1])
+    if len(args) == 5:
+        iter = 300
+        eps = float(args[2])
+        file_name_1 = args[3]
+        file_name_2 = args[4]
+
+    if len(args) == 6:
+        iter = float(args[2])
+        eps = float(args[3])
+        file_name_1 = args[4]
+        file_name_2 = args[5]
 
     try:
-        K = int(args[1])
-        if not (1 < K < int(args[2])):
+        if K.is_integer():
+            K = int(K)
+        else:
+            print("Invalid number of clusters!")
+            sys.exit(1)
+        if not (1 < K):
             raise ValueError("Invalid number of clusters!")
     except ValueError:
         raise ValueError("Invalid number of clusters!")
 
     try:
-        iter = int(args[2]) if len(args) > 5 else 300
+        if iter.is_integer():
+            iter = int(iter)
+        else:
+            print("Invalid maximum iteration!")
+            sys.exit(1)
         if not (1 < iter < 1000):
             raise ValueError("Invalid maximum iteration!")
     except ValueError:
         raise ValueError("Invalid maximum iteration!")
 
     try:
-        eps = float(args[3])
         if eps < 0:
             raise ValueError("Invalid epsilon!")
     except ValueError:
         raise ValueError("Invalid epsilon!")
-
-    file_name_1 = args[4]
-    file_name_2 = args[5]
 
     return K, iter, eps, file_name_1, file_name_2
 
@@ -48,13 +65,8 @@ def kmeans_pp_initialization(data, K):
     indices[0] = np.random.choice(np.arange(1, N + 1)) - 1
     centroids[0] = data[indices[0]]
 
-    print("data:", data)
-    # print("indices[0]:", indices[0])
-    # print("centroids[0]:", centroids[0])
-
     for k in range(1, K):
-        probs = []
-        D2 = np.array([min([np.inner(c - x, c - x) for c in centroids[:k]]) for x in data])
+        D2 = np.array([np.min([np.linalg.norm(c - x) for c in centroids[:k]]) for x in data])
         # divide every value cell by the sum of all cells
         sum_D2 = np.sum(D2)
         probs = D2 / sum_D2
@@ -65,19 +77,16 @@ def kmeans_pp_initialization(data, K):
 
         centroids[k] = data[indices[k]]
 
-    # print("indices:", indices)
-    # print("centroids:", centroids)
     return indices, centroids
 
 
 def main():
     try:
         K, iter, eps, file_name_1, file_name_2 = validate_args(sys.argv)
+
         data_1 = load_data(file_name_1)
         data_2 = load_data(file_name_2)
-
         merged_data = pd.merge(data_1, data_2, on=data_1.columns[0])
-
         sorted_data = merged_data.sort_values(by=merged_data.columns[0])
 
         # update indexes and delete the first col
@@ -85,7 +94,10 @@ def main():
 
         observations = sorted_data.iloc[:, 1:].values
 
-        print("observations:", observations)
+        # Validate that clusters < observations (K < N)
+        N, d = observations.shape
+        if not (K < N):
+            raise ValueError("Invalid number of clusters!")
 
         initial_indices, initial_centroids = kmeans_pp_initialization(observations, K)
 
